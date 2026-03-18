@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1049249597566",
+    "project_id": "uniteindia-pratap",
+    "storage_bucket": "uniteindia-pratap.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1049249597566:android:72af72d80bc6f6923f302f",
+        "android_client_info": {
+          "package_name": "com.example.unite_india_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2aiAYJW_8pQ99Xj2coOgz96ZtTmRgBkk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
