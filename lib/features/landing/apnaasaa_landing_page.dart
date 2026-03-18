@@ -51,10 +51,10 @@ class ApnaasaaLandingPage extends StatelessWidget {
                           ],
                         ),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
+                        children: [
                           Icon(Icons.home_rounded,
                               color: Colors.black, size: 28),
                           SizedBox(width: 10),
@@ -121,7 +121,7 @@ class ApnaasaaLandingPage extends StatelessWidget {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: Colors.white10),
-                        color: Colors.white.withOpacity(0.02),
+                        color: Colors.white.withValues(alpha: 0.02),
                       ),
                       child: const Text(
                         'For this pilot, you can also explore the host journey in preview mode without SMS. '

@@ -61,9 +61,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
                           ],
                         ),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
+                        children: [
                           Icon(Icons.home_rounded,
                               color: Colors.black, size: 26),
                           SizedBox(width: 8),
