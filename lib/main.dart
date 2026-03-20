@@ -7,7 +7,7 @@ import 'package:unite_india_app/core/repositories/trust_repository.dart';
 import 'package:unite_india_app/data/firebase/firebase_auth_repository.dart';
 import 'package:unite_india_app/data/firebase/firebase_host_repository.dart';
 import 'package:unite_india_app/data/firebase/firebase_trust_repository.dart';
-import 'package:unite_india_app/features/landing/apnaasaa_landing_page.dart';
+import 'package:unite_india_app/features/shell/auth_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,7 +47,7 @@ class UniteIndiaApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: ApnaasaaLandingPage(
+      home: AuthGate(
         authRepository: authRepository,
         hostRepository: hostRepository,
         trustRepository: trustRepository,

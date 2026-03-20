@@ -3,6 +3,7 @@ import 'package:unite_india_app/core/domain/user.dart';
 import 'package:unite_india_app/core/repositories/auth_repository.dart';
 import 'package:unite_india_app/core/repositories/host_repository.dart';
 import 'package:unite_india_app/core/repositories/trust_repository.dart';
+import 'package:unite_india_app/core/session/journey_intent.dart';
 import 'package:unite_india_app/features/auth/phone_auth_page.dart';
 import 'package:unite_india_app/features/host_onboarding/host_onboarding_page.dart';
 
@@ -102,7 +103,10 @@ class ApnaasaaLandingPage extends StatelessWidget {
                           child: _PrimaryChoiceButton(
                             label: 'I want to stay',
                             icon: Icons.luggage_rounded,
-                            onTap: () => _openPhoneAuth(context),
+                            onTap: () => _openPhoneAuth(
+                              context,
+                              UserJourneyIntent.guest,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -110,7 +114,10 @@ class ApnaasaaLandingPage extends StatelessWidget {
                           child: _PrimaryChoiceButton(
                             label: 'I want to host',
                             icon: Icons.key_rounded,
-                            onTap: () => _openPhoneAuth(context),
+                            onTap: () => _openPhoneAuth(
+                              context,
+                              UserJourneyIntent.host,
+                            ),
                           ),
                         ),
                       ],
@@ -153,11 +160,14 @@ class ApnaasaaLandingPage extends StatelessWidget {
     );
   }
 
-  void _openPhoneAuth(BuildContext context) {
+  void _openPhoneAuth(BuildContext context, UserJourneyIntent intent) {
+    PendingJourneyIntent.set(intent);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) =>
-            PhoneAuthPage(authRepository: authRepository),
+        builder: (BuildContext context) => PhoneAuthPage(
+          authRepository: authRepository,
+          journeyIntent: intent,
+        ),
       ),
     );
   }

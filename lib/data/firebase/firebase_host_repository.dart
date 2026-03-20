@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:unite_india_app/core/domain/guest_listing.dart';
 import 'package:unite_india_app/core/domain/host.dart';
+import 'package:unite_india_app/core/domain/host_listing_snapshot.dart';
 import 'package:unite_india_app/core/repositories/host_repository.dart';
 
 class FirebaseHostRepository implements HostRepository {
@@ -12,6 +14,7 @@ class FirebaseHostRepository implements HostRepository {
 
   @override
   Future<void> saveHostProfile({
+    required String userId,
     required String displayName,
     required String areaLabel,
     required List<int> selectedSectors,
@@ -26,24 +29,72 @@ class FirebaseHostRepository implements HostRepository {
     int? bedrooms,
     int? beds,
     int? bathrooms,
+    bool? ruleNoLateEntryAfter9,
+    bool? ruleNoSmokingInside,
+    bool? ruleNoCooking,
+    bool? ruleNoOutsideGuests,
+    bool? ruleNoPets,
+    String? otherHouseRules,
+    bool? safetyOnlyQueerOrAllies,
+    bool? safetyNoOutingDiscretion,
+    bool? safetyBuildingSecurity24x7,
+    bool? safetySeparateEntry,
+    String? safetyNotesForQueerGuests,
+    int? minNightlyPriceInr,
+    int? maxNightlyPriceInr,
+    bool? longStayDiscountOffered,
+    int? cleaningFeeInr,
+    int? extraGuestFeeInr,
+    String? otherChargesNote,
+    bool? kycVerifiedPilot,
+    int? kycFailedAttempts,
+    bool? kycBlockedPilot,
+    String? kycBlockReason,
+    String? listingStatus,
   }) async {
-    await _collection.add({
-      'displayName': displayName,
-      'areaLabel': areaLabel,
-      'city': city,
-      'state': state,
-      'lat': lat,
-      'lng': lng,
-      'exactAddress': exactAddress,
-      'landmark': landmark,
-      'propertyType': propertyType,
-      'maxGuests': maxGuests,
-      'bedrooms': bedrooms,
-      'beds': beds,
-      'bathrooms': bathrooms,
-      'sectors': selectedSectors,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+    await _collection.doc(userId).set(
+      {
+        'userId': userId,
+        'displayName': displayName,
+        'areaLabel': areaLabel,
+        'city': city,
+        'state': state,
+        'lat': lat,
+        'lng': lng,
+        'exactAddress': exactAddress,
+        'landmark': landmark,
+        'propertyType': propertyType,
+        'maxGuests': maxGuests,
+        'bedrooms': bedrooms,
+        'beds': beds,
+        'bathrooms': bathrooms,
+        'sectors': selectedSectors,
+        'ruleNoLateEntryAfter9': ruleNoLateEntryAfter9,
+        'ruleNoSmokingInside': ruleNoSmokingInside,
+        'ruleNoCooking': ruleNoCooking,
+        'ruleNoOutsideGuests': ruleNoOutsideGuests,
+        'ruleNoPets': ruleNoPets,
+        'otherHouseRules': otherHouseRules,
+        'safetyOnlyQueerOrAllies': safetyOnlyQueerOrAllies,
+        'safetyNoOutingDiscretion': safetyNoOutingDiscretion,
+        'safetyBuildingSecurity24x7': safetyBuildingSecurity24x7,
+        'safetySeparateEntry': safetySeparateEntry,
+        'safetyNotesForQueerGuests': safetyNotesForQueerGuests,
+        'minNightlyPriceInr': minNightlyPriceInr,
+        'maxNightlyPriceInr': maxNightlyPriceInr,
+        'longStayDiscountOffered': longStayDiscountOffered,
+        'cleaningFeeInr': cleaningFeeInr,
+        'extraGuestFeeInr': extraGuestFeeInr,
+        'otherChargesNote': otherChargesNote,
+        'kycVerifiedPilot': kycVerifiedPilot,
+        'kycFailedAttempts': kycFailedAttempts,
+        'kycBlockedPilot': kycBlockedPilot,
+        'kycBlockReason': kycBlockReason,
+        'listingStatus': listingStatus ?? 'published',
+        'timestamp': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
   }
 
   @override
@@ -66,5 +117,55 @@ class FirebaseHostRepository implements HostRepository {
       );
     }).toList();
   }
-}
 
+  @override
+  Future<List<GuestListingSummary>> listPublishedGuestListings() async {
+    final snapshot = await _collection
+        .where('listingStatus', isEqualTo: 'published')
+        .get();
+    final list = snapshot.docs.map((doc) {
+      final d = doc.data();
+      int? readInt(String key) {
+        final v = d[key];
+        if (v == null) return null;
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+        return null;
+      }
+
+      return GuestListingSummary(
+        id: doc.id,
+        displayName: (d['displayName'] ?? '') as String,
+        areaLabel: (d['areaLabel'] ?? '') as String,
+        city: d['city'] as String?,
+        state: d['state'] as String?,
+        minNightlyPriceInr: readInt('minNightlyPriceInr'),
+        maxNightlyPriceInr: readInt('maxNightlyPriceInr'),
+        propertyType: d['propertyType'] as String?,
+        lat: (d['lat'] as num?)?.toDouble(),
+        lng: (d['lng'] as num?)?.toDouble(),
+      );
+    }).toList();
+    list.sort((a, b) => a.displayName.compareTo(b.displayName));
+    return list;
+  }
+
+  @override
+  Future<GuestListingDetail?> getPublishedListingForGuest(
+    String listingId,
+  ) async {
+    final doc = await _collection.doc(listingId).get();
+    if (!doc.exists) return null;
+    final data = doc.data();
+    if (data == null) return null;
+    if (data['listingStatus'] != 'published') return null;
+    return GuestListingDetail.fromFirestore(doc.id, data);
+  }
+
+  @override
+  Future<HostListingSnapshot?> getHostListingForUser(String userId) async {
+    final doc = await _collection.doc(userId).get();
+    if (!doc.exists) return null;
+    return HostListingSnapshot.fromFirestoreDoc(doc);
+  }
+}

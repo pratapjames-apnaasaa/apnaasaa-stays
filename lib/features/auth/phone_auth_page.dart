@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:unite_india_app/core/repositories/auth_repository.dart';
+import 'package:unite_india_app/core/session/journey_intent.dart';
 
 class PhoneAuthPage extends StatefulWidget {
   const PhoneAuthPage({
     super.key,
     required this.authRepository,
+    required this.journeyIntent,
   });
 
   final AuthRepository authRepository;
+  final UserJourneyIntent journeyIntent;
 
   @override
   State<PhoneAuthPage> createState() => _PhoneAuthPageState();
@@ -20,6 +23,11 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   String? _verificationId;
   bool _isSendingCode = false;
   bool _isVerifying = false;
+
+  String get _intentLine => switch (widget.journeyIntent) {
+        UserJourneyIntent.guest => 'You are signing in to browse and book stays.',
+        UserJourneyIntent.host => 'You are signing in to list your space as a host.',
+      };
 
   @override
   void dispose() {
@@ -85,6 +93,15 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _intentLine,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12,
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -241,6 +258,13 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         verificationId: _verificationId!,
         smsCode: code,
       );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isVerifying = false;
+      });
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (error) {
       if (!mounted) {
         return;
@@ -254,4 +278,3 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     }
   }
 }
-

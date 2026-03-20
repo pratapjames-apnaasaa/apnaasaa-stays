@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:geocoding/geocoding.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:unite_india_app/core/domain/host_listing_snapshot.dart';
 import 'package:unite_india_app/core/domain/user.dart';
 import 'package:unite_india_app/core/domain/verification_status.dart';
 import 'package:unite_india_app/core/repositories/auth_repository.dart';
@@ -24,12 +25,16 @@ class HostOnboardingPage extends StatefulWidget {
     required this.authRepository,
     required this.hostRepository,
     required this.trustRepository,
+    this.initialListing,
   });
 
   final UniteUser currentUser;
   final AuthRepository authRepository;
   final HostRepository hostRepository;
   final TrustRepository trustRepository;
+
+  /// When set, form fields are filled from a saved draft or existing listing.
+  final HostListingSnapshot? initialListing;
 
   @override
   State<HostOnboardingPage> createState() => _HostOnboardingPageState();
@@ -59,6 +64,110 @@ class _HostOnboardingPageState extends State<HostOnboardingPage> {
   int _bathrooms = 1;
   bool _initializedTrust = false;
 
+  // Step 4 — house rules
+  bool _ruleNoLateEntryAfter9 = false;
+  bool _ruleNoSmokingInside = false;
+  bool _ruleNoCooking = false;
+  bool _ruleNoOutsideGuests = false;
+  bool _ruleNoPets = false;
+  final TextEditingController _otherHouseRulesController =
+      TextEditingController();
+
+  // Step 5 — safety
+  bool _safetyOnlyQueerOrAllies = false;
+  bool _safetyNoOutingDiscretion = false;
+  bool _safetyBuildingSecurity24x7 = false;
+  bool _safetySeparateEntry = false;
+  final TextEditingController _safetyNotesController = TextEditingController();
+
+  // Step 6 — pricing
+  final TextEditingController _minPriceController = TextEditingController();
+  final TextEditingController _maxPriceController = TextEditingController();
+  bool _longStayDiscountOffered = false;
+  final TextEditingController _cleaningFeeController = TextEditingController();
+  final TextEditingController _extraGuestFeeController =
+      TextEditingController();
+  final TextEditingController _otherChargesController =
+      TextEditingController();
+
+  // Step 7 — KYC (mock)
+  final TextEditingController _aadhaarController = TextEditingController();
+  final TextEditingController _panController = TextEditingController();
+  int _kycAttempts = 0;
+  bool _kycBlocked = false;
+  bool _kycVerified = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.initialListing;
+    if (s != null) {
+      _applyListingSnapshot(s);
+    }
+  }
+
+  void _applyListingSnapshot(HostListingSnapshot s) {
+    _nameController.text = s.displayName ?? '';
+    _locationController.text = s.areaLabel ?? '';
+    _cityController.text = s.city ?? '';
+    _selectedState = s.state;
+    _exactAddressController.text = s.exactAddress ?? '';
+    _landmarkController.text = s.landmark ?? '';
+    if (s.lat != null && s.lng != null) {
+      _resolvedCenter = LatLng(s.lat!, s.lng!);
+    }
+    selectedSectors
+      ..clear()
+      ..addAll(s.sectors ?? <int>[]);
+    if (s.propertyType != null) {
+      _propertyType = _parsePropertyType(s.propertyType);
+    }
+    if (s.maxGuests != null) _maxGuests = s.maxGuests!.clamp(1, 50);
+    if (s.bedrooms != null) _bedrooms = s.bedrooms!.clamp(1, 50);
+    if (s.beds != null) _beds = s.beds!.clamp(1, 50);
+    if (s.bathrooms != null) _bathrooms = s.bathrooms!.clamp(1, 50);
+    _ruleNoLateEntryAfter9 = s.ruleNoLateEntryAfter9 ?? false;
+    _ruleNoSmokingInside = s.ruleNoSmokingInside ?? false;
+    _ruleNoCooking = s.ruleNoCooking ?? false;
+    _ruleNoOutsideGuests = s.ruleNoOutsideGuests ?? false;
+    _ruleNoPets = s.ruleNoPets ?? false;
+    _otherHouseRulesController.text = s.otherHouseRules ?? '';
+    _safetyOnlyQueerOrAllies = s.safetyOnlyQueerOrAllies ?? false;
+    _safetyNoOutingDiscretion = s.safetyNoOutingDiscretion ?? false;
+    _safetyBuildingSecurity24x7 = s.safetyBuildingSecurity24x7 ?? false;
+    _safetySeparateEntry = s.safetySeparateEntry ?? false;
+    _safetyNotesController.text = s.safetyNotesForQueerGuests ?? '';
+    if (s.minNightlyPriceInr != null) {
+      _minPriceController.text = '${s.minNightlyPriceInr}';
+    }
+    if (s.maxNightlyPriceInr != null) {
+      _maxPriceController.text = '${s.maxNightlyPriceInr}';
+    }
+    _longStayDiscountOffered = s.longStayDiscountOffered ?? false;
+    if (s.cleaningFeeInr != null) {
+      _cleaningFeeController.text = '${s.cleaningFeeInr}';
+    }
+    if (s.extraGuestFeeInr != null) {
+      _extraGuestFeeController.text = '${s.extraGuestFeeInr}';
+    }
+    _otherChargesController.text = s.otherChargesNote ?? '';
+    _kycVerified = s.kycVerifiedPilot ?? false;
+    _kycAttempts = s.kycFailedAttempts ?? 0;
+    _kycBlocked = s.kycBlockedPilot ?? false;
+  }
+
+  _PropertyType _parsePropertyType(String? name) {
+    switch (name) {
+      case 'entireHome':
+        return _PropertyType.entireHome;
+      case 'sharedRoom':
+        return _PropertyType.sharedRoom;
+      case 'privateRoom':
+      default:
+        return _PropertyType.privateRoom;
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -69,6 +178,10 @@ class _HostOnboardingPageState extends State<HostOnboardingPage> {
   }
 
   Future<void> _ensureBasicTrustProfile() async {
+    // Preview mode has no Firebase Auth; trust writes would fail under strict rules.
+    if (widget.currentUser.id == 'preview-web-user') {
+      return;
+    }
     final profile = TrustProfile(
       userId: widget.currentUser.id,
       trustLevel: TrustLevel.newAccount,
@@ -93,6 +206,15 @@ class _HostOnboardingPageState extends State<HostOnboardingPage> {
     _cityController.dispose();
     _exactAddressController.dispose();
     _landmarkController.dispose();
+    _otherHouseRulesController.dispose();
+    _safetyNotesController.dispose();
+    _minPriceController.dispose();
+    _maxPriceController.dispose();
+    _cleaningFeeController.dispose();
+    _extraGuestFeeController.dispose();
+    _otherChargesController.dispose();
+    _aadhaarController.dispose();
+    _panController.dispose();
     super.dispose();
   }
 
@@ -104,7 +226,12 @@ class _HostOnboardingPageState extends State<HostOnboardingPage> {
           switch (step) {
             1 => 'Step 1: Host & Area',
             2 => 'Step 2: Comfort Sectors',
-            _ => 'Step 3: Address & Property',
+            3 => 'Step 3: Address & Property',
+            4 => 'Step 4: House Rules',
+            5 => 'Step 5: Safety & Comfort',
+            6 => 'Step 6: Pricing & Extras',
+            7 => 'Step 7: Identity (pilot)',
+            _ => 'Step 8: Review & Publish',
           },
         ),
         backgroundColor: Colors.orange,
@@ -123,7 +250,12 @@ class _HostOnboardingPageState extends State<HostOnboardingPage> {
       body: switch (step) {
         1 => _buildStep1(),
         2 => _buildStep2(),
-        _ => _buildStep3(),
+        3 => _buildStep3(),
+        4 => _buildStep4(),
+        5 => _buildStep5(),
+        6 => _buildStep6(),
+        7 => _buildStep7(),
+        _ => _buildStep8(),
       },
     );
   }
@@ -506,99 +638,659 @@ class _HostOnboardingPageState extends State<HostOnboardingPage> {
         ),
         const Spacer(),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-          onPressed: () async {
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+          onPressed: () {
             if (_exactAddressController.text.trim().isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Please enter the exact address')),
               );
               return;
             }
-
-            showDialog<void>(
-              context: context,
-              barrierDismissible: false,
-              builder: (BuildContext context) =>
-                  const Center(child: CircularProgressIndicator()),
-            );
-
-            try {
-              await widget.hostRepository.saveHostProfile(
-                displayName: _nameController.text.trim(),
-                areaLabel: _locationController.text.trim(),
-                city: _cityController.text.trim().isEmpty
-                    ? null
-                    : _cityController.text.trim(),
-                state: _selectedState,
-                lat: (_resolvedCenter ?? _center).latitude,
-                lng: (_resolvedCenter ?? _center).longitude,
-                exactAddress: _exactAddressController.text.trim(),
-                landmark: _landmarkController.text.trim().isEmpty
-                    ? null
-                    : _landmarkController.text.trim(),
-                propertyType: _propertyType.name,
-                maxGuests: _maxGuests,
-                bedrooms: _bedrooms,
-                beds: _beds,
-                bathrooms: _bathrooms,
-                selectedSectors: List<int>.from(selectedSectors),
-              );
-
-              if (!mounted) {
-                return;
-              }
-              Navigator.pop(context);
-
-              showDialog<void>(
-                context: context,
-                builder: (BuildContext context) => AlertDialog(
-                  title: const Text('Saved'),
-                  content: const Text(
-                    'Your host details have been saved for the pilot.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        setState(() {
-                          step = 1;
-                          _nameController.clear();
-                          _locationController.clear();
-                          _cityController.clear();
-                          _selectedState = null;
-                          _exactAddressController.clear();
-                          _landmarkController.clear();
-                          selectedSectors.clear();
-                          _resolvedCenter = null;
-                          _propertyType = _PropertyType.privateRoom;
-                          _maxGuests = 1;
-                          _bedrooms = 1;
-                          _beds = 1;
-                          _bathrooms = 1;
-                        });
-                      },
-                      child: const Text('OK'),
-                    ),
-                  ],
-                ),
-              );
-            } catch (error) {
-              if (!mounted) {
-                return;
-              }
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Error: $error')),
-              );
-            }
+            setState(() => step = 4);
           },
           child: const Text(
-            'FINISH SETUP',
+            'NEXT',
             style: TextStyle(color: Colors.white),
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildStep4() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'House rules',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Guests will be asked to agree to these before booking.',
+            style: TextStyle(fontSize: 13, color: Colors.black54),
+          ),
+          const SizedBox(height: 16),
+          SwitchListTile(
+            title: const Text('No entry / exit after 9 PM'),
+            value: _ruleNoLateEntryAfter9,
+            onChanged: (v) => setState(() => _ruleNoLateEntryAfter9 = v),
+          ),
+          SwitchListTile(
+            title: const Text('No smoking inside the room'),
+            value: _ruleNoSmokingInside,
+            onChanged: (v) => setState(() => _ruleNoSmokingInside = v),
+          ),
+          SwitchListTile(
+            title: const Text('No cooking allowed'),
+            value: _ruleNoCooking,
+            onChanged: (v) => setState(() => _ruleNoCooking = v),
+          ),
+          SwitchListTile(
+            title: const Text('No outside guests'),
+            value: _ruleNoOutsideGuests,
+            onChanged: (v) => setState(() => _ruleNoOutsideGuests = v),
+          ),
+          SwitchListTile(
+            title: const Text('No pets'),
+            value: _ruleNoPets,
+            onChanged: (v) => setState(() => _ruleNoPets = v),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _otherHouseRulesController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Other house rules (optional)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () => setState(() => step = 3),
+                child: const Text('BACK'),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: () => setState(() => step = 5),
+                child: const Text('NEXT'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep5() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Safety & guest experience',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 16),
+          SwitchListTile(
+            title: const Text('Only queer / allied guests'),
+            value: _safetyOnlyQueerOrAllies,
+            onChanged: (v) => setState(() => _safetyOnlyQueerOrAllies = v),
+          ),
+          SwitchListTile(
+            title: const Text('No outing / discretion guaranteed'),
+            value: _safetyNoOutingDiscretion,
+            onChanged: (v) => setState(() => _safetyNoOutingDiscretion = v),
+          ),
+          SwitchListTile(
+            title: const Text('24×7 building security'),
+            value: _safetyBuildingSecurity24x7,
+            onChanged: (v) => setState(() => _safetyBuildingSecurity24x7 = v),
+          ),
+          SwitchListTile(
+            title: const Text('Separate entry available'),
+            value: _safetySeparateEntry,
+            onChanged: (v) => setState(() => _safetySeparateEntry = v),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _safetyNotesController,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText:
+                  'Anything a queer guest should know before booking? (optional)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () => setState(() => step = 4),
+                child: const Text('BACK'),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: () => setState(() => step = 6),
+                child: const Text('NEXT'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep6() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Pricing & extras',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _minPriceController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Min nightly (₹)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _maxPriceController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Max nightly (₹)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            title: const Text('I offer long-stay discounts'),
+            value: _longStayDiscountOffered,
+            onChanged: (v) =>
+                setState(() => _longStayDiscountOffered = v),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _cleaningFeeController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Cleaning fee (₹, optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _extraGuestFeeController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Extra guest fee (₹, optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _otherChargesController,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Other charges / notes (optional)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () => setState(() => step = 5),
+                child: const Text('BACK'),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: () {
+                  final minP = int.tryParse(_minPriceController.text.trim());
+                  final maxP = int.tryParse(_maxPriceController.text.trim());
+                  if (minP == null || maxP == null || minP <= 0 || maxP <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Enter valid min and max nightly prices (₹)'),
+                      ),
+                    );
+                    return;
+                  }
+                  if (minP > maxP) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Min price cannot be greater than max'),
+                      ),
+                    );
+                    return;
+                  }
+                  setState(() => step = 7);
+                },
+                child: const Text('NEXT'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep7() {
+    if (_kycBlocked) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(Icons.block, size: 48, color: Colors.red),
+            const SizedBox(height: 16),
+            const Text(
+              'Verification blocked',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Too many unsuccessful attempts. For the pilot, this session is blocked. '
+              'A production build would record device and account signals server-side.',
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Identity verification (pilot)',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Real KYC will go through regulated providers. For now we validate format only.',
+            style: TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _aadhaarController,
+            keyboardType: TextInputType.number,
+            maxLength: 12,
+            decoration: const InputDecoration(
+              labelText: 'Aadhaar (12 digits)',
+              counterText: '',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _panController,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              labelText: 'PAN',
+              hintText: 'ABCDE1234F',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Attempts: $_kycAttempts / 3',
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          if (_kycVerified) ...[
+            const SizedBox(height: 12),
+            const Row(
+              children: [
+                Icon(Icons.verified, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Format check passed (pilot mock)'),
+              ],
+            ),
+          ],
+          const SizedBox(height: 16),
+          OutlinedButton(
+            onPressed: _kycVerified
+                ? null
+                : () {
+                    final ok = _mockKycValid(
+                      _aadhaarController.text,
+                      _panController.text,
+                    );
+                    if (ok) {
+                      setState(() {
+                        _kycVerified = true;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Verification passed (pilot mock)'),
+                        ),
+                      );
+                    } else {
+                      setState(() {
+                        _kycAttempts += 1;
+                        if (_kycAttempts >= 3) {
+                          _kycBlocked = true;
+                        }
+                      });
+                      if (!_kycBlocked) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Could not verify. $_kycAttempts/3 attempts.',
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  },
+            child: const Text('VERIFY'),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () => setState(() => step = 6),
+                child: const Text('BACK'),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: !_kycVerified
+                    ? null
+                    : () => setState(() => step = 8),
+                child: const Text('NEXT: REVIEW'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _mockKycValid(String aadhaar, String pan) {
+    final a = aadhaar.replaceAll(RegExp(r'\s'), '');
+    final p = pan.trim().toUpperCase();
+    // Demo-friendly test pair
+    if (a == '123456789012' && p == 'ABCDE1234F') {
+      return true;
+    }
+    final aOk = RegExp(r'^\d{12}$').hasMatch(a);
+    final pOk = RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$').hasMatch(p);
+    return aOk && pOk;
+  }
+
+  Widget _buildStep8() {
+    final areaLine = [
+      _locationController.text.trim(),
+      _cityController.text.trim(),
+      _selectedState ?? '',
+    ].where((e) => e.isNotEmpty).join(', ');
+
+    final houseRulesSummary = [
+      if (_ruleNoLateEntryAfter9) 'No entry/exit after 9 PM',
+      if (_ruleNoSmokingInside) 'No smoking inside',
+      if (_ruleNoCooking) 'No cooking',
+      if (_ruleNoOutsideGuests) 'No outside guests',
+      if (_ruleNoPets) 'No pets',
+    ];
+    final safetySummary = [
+      if (_safetyOnlyQueerOrAllies) 'Queer/allied only',
+      if (_safetyNoOutingDiscretion) 'Discretion',
+      if (_safetyBuildingSecurity24x7) '24×7 security',
+      if (_safetySeparateEntry) 'Separate entry',
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Review & publish',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Location', style: TextStyle(fontWeight: FontWeight.w600)),
+                  Text(areaLine.isEmpty ? '—' : areaLine),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Map: ${(_resolvedCenter ?? _center).latitude.toStringAsFixed(4)}, '
+                    '${(_resolvedCenter ?? _center).longitude.toStringAsFixed(4)}',
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                  const Divider(height: 24),
+                  const Text('Property', style: TextStyle(fontWeight: FontWeight.w600)),
+                  Text('${_propertyType.name} · max guests $_maxGuests'),
+                  Text('Beds $_beds · Baths $_bathrooms · Bedrooms $_bedrooms'),
+                  const Divider(height: 24),
+                  const Text('House rules', style: TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    houseRulesSummary.isEmpty
+                        ? '—'
+                        : houseRulesSummary.join(' · '),
+                  ),
+                  const Divider(height: 24),
+                  const Text('Safety', style: TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    safetySummary.isEmpty ? '—' : safetySummary.join(' · '),
+                  ),
+                  const Divider(height: 24),
+                  const Text('Pricing', style: TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    '₹${_minPriceController.text.trim()} – ${_maxPriceController.text.trim()} / night',
+                  ),
+                  const Divider(height: 24),
+                  Row(
+                    children: [
+                      Icon(
+                        _kycVerified ? Icons.verified : Icons.pending,
+                        color: _kycVerified ? Colors.green : Colors.orange,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _kycVerified
+                            ? 'Identity format verified (pilot)'
+                            : 'Identity not verified',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () => setState(() => step = 7),
+                child: const Text('BACK'),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () => _publishListing(status: 'draft'),
+                child: const Text('Save draft'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () => _publishListing(status: 'published'),
+                child: const Text('Confirm & publish to pilot'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _publishListing({required String status}) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      await widget.hostRepository.saveHostProfile(
+        userId: widget.currentUser.id,
+        displayName: _nameController.text.trim(),
+        areaLabel: _locationController.text.trim(),
+        city: _cityController.text.trim().isEmpty
+            ? null
+            : _cityController.text.trim(),
+        state: _selectedState,
+        lat: (_resolvedCenter ?? _center).latitude,
+        lng: (_resolvedCenter ?? _center).longitude,
+        exactAddress: _exactAddressController.text.trim(),
+        landmark: _landmarkController.text.trim().isEmpty
+            ? null
+            : _landmarkController.text.trim(),
+        propertyType: _propertyType.name,
+        maxGuests: _maxGuests,
+        bedrooms: _bedrooms,
+        beds: _beds,
+        bathrooms: _bathrooms,
+        selectedSectors: List<int>.from(selectedSectors),
+        ruleNoLateEntryAfter9: _ruleNoLateEntryAfter9,
+        ruleNoSmokingInside: _ruleNoSmokingInside,
+        ruleNoCooking: _ruleNoCooking,
+        ruleNoOutsideGuests: _ruleNoOutsideGuests,
+        ruleNoPets: _ruleNoPets,
+        otherHouseRules: _otherHouseRulesController.text.trim().isEmpty
+            ? null
+            : _otherHouseRulesController.text.trim(),
+        safetyOnlyQueerOrAllies: _safetyOnlyQueerOrAllies,
+        safetyNoOutingDiscretion: _safetyNoOutingDiscretion,
+        safetyBuildingSecurity24x7: _safetyBuildingSecurity24x7,
+        safetySeparateEntry: _safetySeparateEntry,
+        safetyNotesForQueerGuests: _safetyNotesController.text.trim().isEmpty
+            ? null
+            : _safetyNotesController.text.trim(),
+        minNightlyPriceInr: int.tryParse(_minPriceController.text.trim()),
+        maxNightlyPriceInr: int.tryParse(_maxPriceController.text.trim()),
+        longStayDiscountOffered: _longStayDiscountOffered,
+        cleaningFeeInr: int.tryParse(_cleaningFeeController.text.trim()),
+        extraGuestFeeInr: int.tryParse(_extraGuestFeeController.text.trim()),
+        otherChargesNote: _otherChargesController.text.trim().isEmpty
+            ? null
+            : _otherChargesController.text.trim(),
+        kycVerifiedPilot: _kycVerified,
+        kycFailedAttempts: _kycAttempts,
+        kycBlockedPilot: _kycBlocked,
+        kycBlockReason: _kycBlocked
+            ? 'Too many failed KYC attempts (pilot)'
+            : null,
+        listingStatus: status,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(status == 'draft' ? 'Draft saved' : 'Published'),
+          content: Text(
+            status == 'draft'
+                ? 'Your draft is saved. You can continue editing from the Host tab.'
+                : 'Your listing has been saved to the pilot. Thank you for building ApnaaSaa Stays.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _resetWizard();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  void _resetWizard() {
+    setState(() {
+      step = 1;
+      _nameController.clear();
+      _locationController.clear();
+      _cityController.clear();
+      _selectedState = null;
+      _exactAddressController.clear();
+      _landmarkController.clear();
+      selectedSectors.clear();
+      _resolvedCenter = null;
+      _propertyType = _PropertyType.privateRoom;
+      _maxGuests = 1;
+      _bedrooms = 1;
+      _beds = 1;
+      _bathrooms = 1;
+      _ruleNoLateEntryAfter9 = false;
+      _ruleNoSmokingInside = false;
+      _ruleNoCooking = false;
+      _ruleNoOutsideGuests = false;
+      _ruleNoPets = false;
+      _otherHouseRulesController.clear();
+      _safetyOnlyQueerOrAllies = false;
+      _safetyNoOutingDiscretion = false;
+      _safetyBuildingSecurity24x7 = false;
+      _safetySeparateEntry = false;
+      _safetyNotesController.clear();
+      _minPriceController.clear();
+      _maxPriceController.clear();
+      _longStayDiscountOffered = false;
+      _cleaningFeeController.clear();
+      _extraGuestFeeController.clear();
+      _otherChargesController.clear();
+      _aadhaarController.clear();
+      _panController.clear();
+      _kycAttempts = 0;
+      _kycBlocked = false;
+      _kycVerified = false;
+    });
   }
 
   Future<void> _resolveAreaToMapCenter() async {

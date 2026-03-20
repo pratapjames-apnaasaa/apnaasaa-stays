@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// Deploy: firebase deploy --only firestore:rules
+// The preview-web-user branch supports the demo host flow without Firebase Auth.
+// Remove that branch for production if you disable preview mode.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /hosts/{hostId} {
+      allow read: if resource.data.listingStatus == 'published'
+        || (request.auth != null && request.auth.uid == hostId)
+        || hostId == 'preview-web-user';
+
+      allow create, update: if
+        (request.auth != null
+          && request.auth.uid == hostId
+          && request.resource.data.userId == request.auth.uid)
+        || (hostId == 'preview-web-user'
+          && request.resource.data.userId == 'preview-web-user');
+
+      allow delete: if request.auth != null && request.auth.uid == hostId;
+    }
+
+    match /trust_profiles/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
