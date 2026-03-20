@@ -21,3 +21,20 @@ class PendingJourneyIntent {
     return v;
   }
 }
+
+/// After anonymous sign-in from "preview host", open host onboarding once.
+class PendingHostSetup {
+  PendingHostSetup._();
+
+  static bool _pending = false;
+
+  static void schedule() {
+    _pending = true;
+  }
+
+  static bool take() {
+    final v = _pending;
+    _pending = false;
+    return v;
+  }
+}

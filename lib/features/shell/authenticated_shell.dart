@@ -33,6 +33,15 @@ class _AuthenticatedShellState extends State<AuthenticatedShell> {
     super.initState();
     final intent = PendingJourneyIntent.take();
     _index = intent == UserJourneyIntent.host ? 1 : 0;
+    final openHostSetup = PendingHostSetup.take();
+    if (openHostSetup) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _openHostOnboarding();
+      });
+    }
   }
 
   Future<void> _openHostOnboarding() async {

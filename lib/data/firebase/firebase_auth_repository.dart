@@ -58,5 +58,10 @@ class FirebaseAuthRepository implements AuthRepository {
   Future<void> signOut() async {
     await _firebaseAuth.signOut();
   }
+
+  @override
+  Future<void> signInAnonymously() async {
+    await _firebaseAuth.signInAnonymously();
+  }
 }
 

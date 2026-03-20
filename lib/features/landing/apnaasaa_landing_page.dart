@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:unite_india_app/core/domain/user.dart';
 import 'package:unite_india_app/core/repositories/auth_repository.dart';
 import 'package:unite_india_app/core/repositories/host_repository.dart';
 import 'package:unite_india_app/core/repositories/trust_repository.dart';
 import 'package:unite_india_app/core/session/journey_intent.dart';
 import 'package:unite_india_app/features/auth/phone_auth_page.dart';
-import 'package:unite_india_app/features/host_onboarding/host_onboarding_page.dart';
 
 class ApnaasaaLandingPage extends StatelessWidget {
   const ApnaasaaLandingPage({
@@ -172,23 +170,20 @@ class ApnaasaaLandingPage extends StatelessWidget {
     );
   }
 
-  void _enterPreviewHostFlow(BuildContext context) {
-    final previewUser = UniteUser(
-      id: 'preview-web-user',
-      phoneNumber: '',
-      isHost: true,
-    );
-
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (BuildContext context) => HostOnboardingPage(
-          currentUser: previewUser,
-          authRepository: authRepository,
-          hostRepository: hostRepository,
-          trustRepository: trustRepository,
-        ),
-      ),
-    );
+  Future<void> _enterPreviewHostFlow(BuildContext context) async {
+    PendingJourneyIntent.set(UserJourneyIntent.host);
+    PendingHostSetup.schedule();
+    try {
+      await authRepository.signInAnonymously();
+    } catch (e) {
+      PendingJourneyIntent.take();
+      PendingHostSetup.take();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start preview: $e')),
+        );
+      }
+    }
   }
 }
 

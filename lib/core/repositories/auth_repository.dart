@@ -15,5 +15,8 @@ abstract class AuthRepository {
   });
 
   Future<void> signOut();
+
+  /// Anonymous Firebase Auth (e.g. preview host flow without phone OTP).
+  Future<void> signInAnonymously();
 }
 

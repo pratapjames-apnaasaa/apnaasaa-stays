@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:geocoding/geocoding.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:unite_india_app/config/maps_config.dart';
 import 'package:unite_india_app/core/domain/host_listing_snapshot.dart';
 import 'package:unite_india_app/core/domain/user.dart';
 import 'package:unite_india_app/core/domain/verification_status.dart';
@@ -178,10 +179,6 @@ class _HostOnboardingPageState extends State<HostOnboardingPage> {
   }
 
   Future<void> _ensureBasicTrustProfile() async {
-    // Preview mode has no Firebase Auth; trust writes would fail under strict rules.
-    if (widget.currentUser.id == 'preview-web-user') {
-      return;
-    }
     final profile = TrustProfile(
       userId: widget.currentUser.id,
       trustLevel: TrustLevel.newAccount,
@@ -1356,9 +1353,11 @@ Future<LatLng?> _geocodeViaGeocodingPackage(String query) async {
 
 Future<LatLng?> _geocodeViaGoogleMapsHttp(String query) async {
   try {
-    // Note: This key is already public in web/index.html for Maps JS.
-    // Must match web/index.html Maps JS key (Geocoding API must be enabled for this project).
-    const apiKey = 'AIzaSyCDg5YQit-hIdcB8eShUokfYPn-KkeHjOY';
+    final apiKey = MapsConfig.googleMapsApiKey;
+    if (apiKey.isEmpty) {
+      return null;
+    }
+    // Same key as GOOGLE_MAPS_API_KEY (Geocoding API must be enabled).
     final uri = Uri.https(
       'maps.googleapis.com',
       '/maps/api/geocode/json',

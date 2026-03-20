@@ -1,23 +1,18 @@
 rules_version = '2';
 
 // Deploy: firebase deploy --only firestore:rules
-// The preview-web-user branch supports the demo host flow without Firebase Auth.
-// Remove that branch for production if you disable preview mode.
+// Enable Anonymous sign-in in Firebase Console for "preview host" on web.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
     match /hosts/{hostId} {
       allow read: if resource.data.listingStatus == 'published'
-        || (request.auth != null && request.auth.uid == hostId)
-        || hostId == 'preview-web-user';
+        || (request.auth != null && request.auth.uid == hostId);
 
-      allow create, update: if
-        (request.auth != null
-          && request.auth.uid == hostId
-          && request.resource.data.userId == request.auth.uid)
-        || (hostId == 'preview-web-user'
-          && request.resource.data.userId == 'preview-web-user');
+      allow create, update: if request.auth != null
+        && request.auth.uid == hostId
+        && request.resource.data.userId == request.auth.uid;
 
       allow delete: if request.auth != null && request.auth.uid == hostId;
     }

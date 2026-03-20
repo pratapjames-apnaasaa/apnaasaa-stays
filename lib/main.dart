@@ -8,10 +8,12 @@ import 'package:unite_india_app/data/firebase/firebase_auth_repository.dart';
 import 'package:unite_india_app/data/firebase/firebase_host_repository.dart';
 import 'package:unite_india_app/data/firebase/firebase_trust_repository.dart';
 import 'package:unite_india_app/features/shell/auth_gate.dart';
+import 'package:unite_india_app/platform/load_google_maps.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await loadGoogleMapsScript();
 
   final hostRepository = FirebaseHostRepository(FirebaseFirestore.instance);
   final authRepository = FirebaseAuthRepository(FirebaseAuth.instance);
